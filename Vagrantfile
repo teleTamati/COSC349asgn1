@@ -14,40 +14,86 @@ Vagrant.configure("2") do |config|
   # WEBSERVER VM DEFINITION
   # ==========================================
   config.vm.define "webserver" do |webserver|
-    # This creates a VM named "webserver" 
-    # The |webserver| variable lets us configure this specific VM
-    
-    # Set the hostname inside the VM (what you see in the shell prompt)
     webserver.vm.hostname = "webserver"
-    
-    # PORT FORWARDING: Connect host port 8080 to VM port 80
-    # guest: 80        = port 80 inside the VM (where Apache serves)
-    # host: 8080       = port 8080 on your Windows computer  
-    # host_ip: "127.0.0.1" = only allow connections from localhost (security)
-    # This is WHY http://127.0.0.1:8080 works in your browser!
     webserver.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
-    
-    # PRIVATE NETWORK: Give this VM a static IP for VM-to-VM communication
-    # This creates a virtual network that only your VMs can use
-    # Think of it like a private LAN between your VMs
     webserver.vm.network "private_network", ip: "192.168.56.11"
     
-    # PROVISIONING: Commands that run ONCE when VM is first created
-    # This is like a script that sets up the VM automatically
     webserver.vm.provision "shell", inline: <<-SHELL
-      # Update Ubuntu package lists (like running Windows Update)
       apt-get update
+      apt-get install -y apache2 php libapache2-mod-php php-mysql
       
-      # Install Apache web server
-      apt-get install -y apache2
+      # Remove default Apache page so PHP gets served
+      rm -f /var/www/html/index.html
       
-      # Create a custom web page (overwrites Apache default page)
-      # The > creates/overwrites the file, >> appends to it
-      echo "<h1>Task Tracker Webserver</h1>" > /var/www/html/index.html
-      echo "<p>Webserver VM IP: 192.168.56.11</p>" >> /var/www/html/index.html
+      # Create PHP task tracker (using tee method that worked)
+      cat > /var/www/html/index.php << 'PHPEOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .completed { text-decoration: line-through; color: #888; }
+        .priority-high { color: #d73027; font-weight: bold; }
+        .priority-medium { color: #fc8d59; }
+        .priority-low { color: #91bfdb; }
+    </style>
+</head>
+<body>
+    <h1>My Task Tracker</h1>
+    <p>Database Server: 192.168.56.12</p>
+    
+    <h2>Current Tasks</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Description</th>
+            <th>Priority</th>
+            <th>Due Date</th>
+            <th>Status</th>
+        </tr>
+        
+        <?php
+        $db_host = '192.168.56.12';
+        $db_name = 'tasktracker';
+        $db_user = 'webuser';
+        $db_passwd = 'insecure_db_pw';
+        
+        try {
+            $pdo = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_passwd);
+            $query = $pdo->query("SELECT * FROM tasks ORDER BY due_date ASC");
+            
+            while($task = $query->fetch()) {
+                $completed_class = $task['completed'] ? 'completed' : '';
+                $priority_class = 'priority-' . $task['priority'];
+                $status = $task['completed'] ? 'Completed' : 'Pending';
+                
+                echo "<tr class='$completed_class'>";
+                echo "<td>" . $task['id'] . "</td>";
+                echo "<td>" . htmlspecialchars($task['title']) . "</td>";
+                echo "<td>" . htmlspecialchars($task['description']) . "</td>";
+                echo "<td class='$priority_class'>" . ucfirst($task['priority']) . "</td>";
+                echo "<td>" . $task['due_date'] . "</td>";
+                echo "<td>" . $status . "</td>";
+                echo "</tr>";
+            }
+        } catch(PDOException $e) {
+            echo "<tr><td colspan='6'>Database connection failed: " . $e->getMessage() . "</td></tr>";
+        }
+        ?>
+    </table>
+    
+    <p><em>VM-to-VM database connection successful!</em></p>
+</body>
+</html>
+PHPEOF
       
-      # Apache automatically serves files from /var/www/html/
-      # So index.html becomes the homepage you see in your browser
+      service apache2 restart
+      echo "Webserver ready with PHP task tracker"
     SHELL
   end
 
@@ -55,19 +101,54 @@ Vagrant.configure("2") do |config|
   # DATABASE VM DEFINITION  
   # ==========================================
   config.vm.define "database" do |database|
-    # This creates a second VM named "database"
-    
     database.vm.hostname = "database"
-    
-    # Give database VM a different IP on the same private network
-    # Now webserver (192.168.56.11) can talk to database (192.168.56.12)
     database.vm.network "private_network", ip: "192.168.56.12"
     
-    # Minimal provisioning for now - just update packages
+    # Install and configure MySQL database
     database.vm.provision "shell", inline: <<-SHELL
       apt-get update
-      # This echo command just confirms the VM was provisioned
-      echo "Database VM provisioned at 192.168.56.12"
+      
+      # Set MySQL root password before installation (prevents interactive prompts)
+      export MYSQL_PWD='insecure_mysqlroot_pw'
+      echo "mysql-server mysql-server/root_password password $MYSQL_PWD" | debconf-set-selections 
+      echo "mysql-server mysql-server/root_password_again password $MYSQL_PWD" | debconf-set-selections
+      
+      # Install MySQL server
+      apt-get install -y mysql-server
+      service mysql start
+      
+      # Create task tracker database
+      echo "CREATE DATABASE tasktracker;" | mysql
+      
+      # Create database user for webserver connections
+      echo "CREATE USER 'webuser'@'%' IDENTIFIED BY 'insecure_db_pw';" | mysql
+      echo "GRANT ALL PRIVILEGES ON tasktracker.* TO 'webuser'@'%'" | mysql
+      
+      # Create tasks table
+      export MYSQL_PWD='insecure_db_pw'
+      cat <<EOF | mysql -u webuser tasktracker
+CREATE TABLE tasks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    completed BOOLEAN DEFAULT FALSE,
+    due_date DATE,
+    priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert sample tasks
+INSERT INTO tasks (title, description, completed, due_date, priority) VALUES 
+('Learn Vagrant', 'Complete COSC349 multi-VM setup', FALSE, '2025-09-08', 'high'),
+('Build Task Tracker', 'Implement web-based task management', FALSE, '2025-09-10', 'high'),
+('Test VM Communication', 'Verify database connectivity works', FALSE, '2025-09-07', 'medium');
+EOF
+      
+      # Allow external connections (from webserver VM)
+      sed -i'' -e '/bind-address/s/127.0.0.1/0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
+      service mysql restart
+      
+      echo "Database VM ready with tasktracker database"
     SHELL
   end
   
