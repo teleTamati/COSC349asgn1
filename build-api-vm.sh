@@ -1,4 +1,3 @@
-cat > build-api-vm.sh << 'SCRIPT'
 #!/bin/bash
 # API VM setup script
 
@@ -21,4 +20,3 @@ chmod -R 755 /var/www/html/
 service apache2 restart
 
 echo "✅ API VM ready at 192.168.56.13"
-SCRIPT

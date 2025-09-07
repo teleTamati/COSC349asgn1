@@ -1,4 +1,3 @@
-cat > build-database-vm.sh << 'SCRIPT'
 #!/bin/bash
 # Database VM setup script
 
@@ -29,4 +28,3 @@ sed -i'' -e '/bind-address/s/127.0.0.1/0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.
 service mysql restart
 
 echo "✅ Database VM ready at 192.168.56.12"
-SCRIPT
