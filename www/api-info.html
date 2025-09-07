@@ -1,0 +1,25 @@
+cat > www/api-info.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Tracker API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .status { padding: 10px; background: #e8f5e8; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🔌 Task Tracker API Server</h1>
+    <div class="status">✅ API VM running at 192.168.56.13</div>
+    <p>Database VM at 192.168.56.12</p>
+    <h3>API Endpoints:</h3>
+    <ul>
+        <li><a href="/api.php">GET /api.php</a> - Get all tasks (JSON)</li>
+        <li>POST /api.php - Create new task</li>
+        <li>PUT /api.php - Toggle task completion</li>
+        <li>DELETE /api.php - Delete task</li>
+    </ul>
+    <p><em>Lab 6 style architecture - Clean script organization</em></p>
+</body>
+</html>
+EOF
