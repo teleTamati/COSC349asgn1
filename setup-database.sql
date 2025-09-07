@@ -1,4 +1,3 @@
-cat > setup-database.sql << 'EOF'
 -- Task Tracker Database Schema
 -- Used by build-database-vm.sh
 
@@ -19,4 +18,3 @@ INSERT INTO tasks (title, description, completed, due_date, priority) VALUES
 ('Create Frontend Interface', 'Build JavaScript interface for task tracker', FALSE, '2025-09-10', 'medium'),
 ('Test VM Communication', 'Verify all 3 VMs work together', FALSE, '2025-09-11', 'medium'),
 ('Organize Lab 6 Style', 'Use clean script-based architecture', FALSE, '2025-09-12', 'medium');
-EOF
