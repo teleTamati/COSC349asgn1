@@ -13,7 +13,7 @@
             min-height: 100vh;
         }
         .container { 
-            max-width: 800px; 
+            max-width: 1000px; 
             margin: 0 auto; 
             background: white;
             padding: 30px;
@@ -35,7 +35,7 @@
         }
         .form-row {
             display: grid;
-            grid-template-columns: 2fr 3fr 1fr auto;
+            grid-template-columns: 2fr 3fr 1fr 1fr auto;
             gap: 15px;
             align-items: center;
         }
@@ -96,6 +96,27 @@
         .priority-medium { color: #f57c00; font-weight: 500; }
         .priority-low { color: #388e3c; }
         
+        /* NEW: Due date styling */
+        .overdue { 
+            color: #d32f2f; 
+            font-weight: bold;
+            background-color: #ffebee;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .due-soon { 
+            color: #f57c00; 
+            font-weight: 500;
+            background-color: #fff3e0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .due-normal { 
+            color: #388e3c; 
+        }
+        
         .architecture {
             margin-top: 30px;
             padding: 20px;
@@ -122,6 +143,7 @@
             <div class="form-row">
                 <input type="text" id="newTitle" placeholder="Task title..." required>
                 <input type="text" id="newDescription" placeholder="Description...">
+                <input type="date" id="newDueDate" placeholder="Due date...">
                 <select id="newPriority">
                     <option value="low">Low Priority</option>
                     <option value="medium" selected>Medium Priority</option>
@@ -138,6 +160,7 @@
                         <th>Title</th>
                         <th>Description</th>
                         <th>Priority</th>
+                        <th>Due Date</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -154,6 +177,7 @@
             <p><strong>Frontend VM (192.168.56.11):</strong> JavaScript SPA - This interface</p>
             <p><strong>API VM (192.168.56.13):</strong> PHP REST API - Handles business logic</p>
             <p><strong>Database VM (192.168.56.12):</strong> MySQL Database - Data persistence</p>
+           
         </div>
     </div>
 
@@ -174,7 +198,7 @@
                 
                 if (data.success) {
                     statusDiv.className = 'status success';
-                    statusDiv.textContent = `Task Count: ${data.tasks.length} tasks via 3-VM chain`;
+                    statusDiv.textContent = `${data.tasks.length} tasks recorded`;
                     
                     // Clear previous content
                     tbody.innerHTML = '';
@@ -187,11 +211,13 @@
                         data.tasks.forEach(task => {
                             const row = tbody.insertRow();
                             const priorityClass = `priority-${task.priority}`;
+                            const dueDateClass = getDueDateClass(task.due_date);
                             
                             row.innerHTML = `
                                 <td><strong>${escapeHtml(task.title)}</strong></td>
                                 <td>${escapeHtml(task.description)}</td>
                                 <td class="${priorityClass}">${capitalizeFirst(task.priority)}</td>
+                                <td class="${dueDateClass}">${formatDueDate(task.due_date)}</td>
                                 <td>
                                     <button class="btn-done" onclick="markDone(${task.id})">
                                         Done
@@ -227,7 +253,8 @@
             const taskData = {
                 title: title,
                 description: document.getElementById('newDescription').value.trim(),
-                priority: document.getElementById('newPriority').value
+                priority: document.getElementById('newPriority').value,
+                due_date: document.getElementById('newDueDate').value || null
             };
             
             try {
@@ -243,6 +270,7 @@
                     document.getElementById('newTitle').value = '';
                     document.getElementById('newDescription').value = '';
                     document.getElementById('newPriority').value = 'medium';
+                    document.getElementById('newDueDate').value = '';
                     
                     // Reload tasks
                     loadTasks();
@@ -274,6 +302,29 @@
                 alert('Connection error: ' + error.message);
                 console.error('Mark done error:', error);
             }
+        }
+        
+        // NEW: Due date helper functions
+        function formatDueDate(dueDate) {
+            if (!dueDate) return 'No date set';
+            const date = new Date(dueDate);
+            return date.toLocaleDateString();
+        }
+        
+        function getDueDateClass(dueDate) {
+            if (!dueDate) return '';
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Start of today
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0); // Start of due date
+            
+            const diffTime = due - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) return 'overdue';
+            if (diffDays <= 1) return 'due-soon';
+            return 'due-normal';
         }
         
         // Utility functions
